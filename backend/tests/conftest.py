@@ -6,9 +6,9 @@ from dotenv import load_dotenv
 from pathlib import Path
 
 load_dotenv(Path(__file__).parent.parent / '.env')
+load_dotenv(Path(__file__).parent.parent.parent / 'frontend' / '.env')
 
-BASE_URL = os.environ['REACT_APP_BACKEND_URL'].rstrip('/') if os.environ.get('REACT_APP_BACKEND_URL') \
-    else "https://vibesmai.preview.emergentagent.com"
+BASE_URL = os.environ['REACT_APP_BACKEND_URL'].rstrip('/')
 MONGO_URL = os.environ['MONGO_URL']
 DB_NAME = os.environ['DB_NAME']
 ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL', 'raraaaghs22@gmail.com').lower()

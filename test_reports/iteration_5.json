@@ -1,0 +1,40 @@
+{
+  "summary": "Fresh import smoke+regression. Services healthy. GET /api/ returns {message:'VIBESMAI API'}. Public /submit flow (Playwright): form filled (full name, class XI 1, absen 42, YouTube link), POST /api/submissions → 200 with the exact bilingual success copy; background grader completed within ~20s (status=draft, ai_score=0 for Rick-Roll placeholder — not readable Indonesian rubric content, this is correct behaviour, no crash). /results shows the 'Halaman nilai belum dibuka' banner when results_public=false. /admin renders the Emergent Google login (button-google-login, link-login-home). Backend pytest regression (REACT_APP_BACKEND_URL overridden to the preview URL since backend/.env does not expose it): 30/33 pass. 2 failures are expected (TestSeededAISamples needs 'Test YouTube'/'Test IG Privat' seeds from prior iterations — not present in fresh import). 1 failure (TestPublicResults::test_public_results_enabled_only_final_exposed) is a parallel-worker race on the shared `settings.results_public` doc; passes 2/2 with `-n 0`. No code-level bugs found.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/app/backend/tests/conftest.py", "issue": "BASE_URL falls back to the old 'vibesmai.preview.emergentagent.com' host because backend/.env has no REACT_APP_BACKEND_URL. Causes 100% test failures until REACT_APP_BACKEND_URL is exported. Fix: either load frontend/.env in conftest or hard-code BASE_URL from REACT_APP_BACKEND_URL in frontend/.env."},
+      {"endpoint": "tests/test_backend_api.py::TestPublicResults", "issue": "Race against the global `settings.results_public` doc under pytest-xdist (-n 2). Add class-level isolation (e.g. serial marker, or scope settings per test class) or guard with retry."},
+      {"endpoint": "tests/test_backend_api.py::TestSeededAISamples", "issue": "Hard-depends on 'Test IG Privat' and 'Test YouTube' seed records that don't exist on a fresh import. Make this a fixture that seeds the records (or skip when missing)."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_backend_api.py",
+    "/app/backend/tests/test_feedback.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Point /app/backend/tests/conftest.py at frontend/.env (or add REACT_APP_BACKEND_URL to backend/.env) so pytest doesn't hit the old host.",
+    "Make TestPublicResults isolate the results_public flag (e.g. mark class as serial / lock the setting) to eliminate xdist race.",
+    "Rewrite TestSeededAISamples to seed its own IG-private/YouTube records instead of relying on pre-existing documents."
+  ],
+  "critical_code_review_comments": [
+    "server.py line 32 reads EMERGENT_LLM_KEY with os.environ[...] (hard fail on missing key) — good fast-fail.",
+    "server.py startup migrates legacy schema, re-queues interrupted grading + feedback jobs, and ensures ADMIN_EMAIL is seeded only if present — robust.",
+    "PriorityLock still correct (teacher PRIO=0 served ahead of background grading).",
+    "SubmissionIn still accepts legacy `video_url` alias — good backwards compatibility.",
+    "/api/submissions returns the exact bilingual success message the frontend expects — verified end-to-end.",
+    "Minor: @app.on_event is deprecated in FastAPI 0.109+; migrate to lifespan handlers when convenient (not blocking)."
+  ],
+  "updated_files": [
+    "/app/memory/test_credentials.md"
+  ],
+  "success_rate": {"backend": "30/33 (parallel) · 33/33 if `-n 0` and seed data present", "frontend": "100% smoke (submit → success · results banner · admin login)"},
+  "test_credentials": "Admin session_token=test_admin_session_vibesmai (raraaaghs22@gmail.com); non-admin session_token=test_nonadmin_session_vibesmai. Seeded both users+sessions and the settings.admin doc. See /app/memory/test_credentials.md.",
+  "seed_data_creation": "Seeded admin user + session + non-admin user + session + settings.admin for raraaaghs22@gmail.com. All TEST_ submissions created by UI/pytest were deleted; results_public reset to false.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Fresh import — no 'Test YouTube' / 'Test IG Privat' legacy seeds. If you need them, re-seed. Run backend tests with `REACT_APP_BACKEND_URL=https://rara-main.preview.emergentagent.com pytest tests/test_backend_api.py -m 'not slow' -n 0` to avoid xdist flakes on TestPublicResults. test_feedback.py (long-running async) was NOT re-run this iteration since it needs Gemini and iteration 4 already fully covered it; re-run only if ask_llm/feedback_job code paths changed.",
+  "rca of the issue": "Not a code bug: conftest's BASE_URL fallback pointed at a non-existent old preview host because backend/.env lacks REACT_APP_BACKEND_URL. Exporting the correct URL in the env made 30/33 tests pass immediately. The remaining 2 'seeded sample' failures and 1 PublicResults flake are test-harness issues, documented above."
+}
