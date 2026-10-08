@@ -1,0 +1,160 @@
+{
+  "project_title": "Seni Musik XI - AI Music Class Journal & Automated Video Grading Platform",
+  "design_archetype": "Organic & Modern Studio (Earthy Warm Ivory + Studio Amber Accent + Swiss Precision)",
+  "theme": "light",
+  "typography": {
+    "heading_font": "Plus Jakarta Sans, Cabinet Grotesk, sans-serif",
+    "body_font": "Inter, Plus Jakarta Sans, sans-serif",
+    "mono_font": "JetBrains Mono, monospace",
+    "heading_rules": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 leading-tight",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight text-slate-900",
+      "h3": "text-lg sm:text-xl lg:text-2xl font-semibold text-slate-800",
+      "h4": "text-base sm:text-lg font-semibold text-slate-800",
+      "overline": "text-xs font-bold uppercase tracking-widest text-amber-700 bg-amber-100/80 px-2.5 py-1 rounded-full w-max"
+    },
+    "pairing_philosophy": "Combine structured, warm sans-serif for headings with high-contrast readable sans for data tables and form inputs. Use monospace for video link handles, AI confidence scores, and raw metadata tags."
+  },
+  "colors": {
+    "background_main": "#FDFBF7",
+    "card_background": "#FFFFFF",
+    "card_border": "#E2E8F0",
+    "primary": {
+      "default": "#D97706",
+      "hover": "#B45309",
+      "text": "#FFFFFF",
+      "description": "Warm Studio Amber / Terracotta Gold - represents music craft & warm creative lighting"
+    },
+    "secondary": {
+      "default": "#1E293B",
+      "hover": "#0F172A",
+      "text": "#FFFFFF",
+      "description": "Deep Slate Indigo - for teacher command buttons and primary navigation headers"
+    },
+    "accent_mint": {
+      "default": "#059669",
+      "bg_soft": "#ECFDF5",
+      "description": "Grade A / Success status green"
+    },
+    "accent_sky": {
+      "default": "#0284C7",
+      "bg_soft": "#F0F9FF",
+      "description": "Grade B / Processing state blue"
+    },
+    "accent_rose": {
+      "default": "#E11D48",
+      "bg_soft": "#FFF1F2",
+      "description": "Grade D / Error or Missing submission rose"
+    },
+    "platform_badge_colors": {
+      "tiktok": "bg-slate-900 text-white hover:bg-black",
+      "instagram": "bg-gradient-to-r from-purple-600 via-pink-600 to-amber-500 text-white",
+      "youtube": "bg-red-600 text-white hover:bg-red-700",
+      "facebook": "bg-blue-600 text-white hover:bg-blue-700"
+    },
+    "forbidden_colors": [
+      "#7351B7",
+      "#1B93A4",
+      "#000000 pure black without tint"
+    ]
+  },
+  "layout_and_spacing": {
+    "container_padding": "px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto",
+    "card_padding": "p-5 sm:p-6 lg:p-8",
+    "grid_gap": "gap-6 lg:gap-8",
+    "border_radius": "rounded-2xl for cards and panels, rounded-xl for inputs and buttons, rounded-full for status pills",
+    "header_strategy": "Sticky glassmorphic navbar with backdrop-blur-md bg-white/90 border-b border-amber-900/10 shadow-sm z-50",
+    "page_structure": {
+      "public_submit": "Centered modern card hero with dual language switcher (ID / EN), clean video platform preview, real-time URL detection badge (TikTok, IG, YouTube, FB), clear class selector XI 1 - XI 12, attendance input (1-40), and crisp state feedback.",
+      "public_results": "Public lookup form requiring Class selection + Attendance number. Displays published scores, grade breakdown (Content 50%, Delivery 30%, Technical 20%), strengths, and suggestions without exposing teacher notes or pending AI evaluations.",
+      "teacher_dashboard": "Header metric summary cards (Total Submissions, Graded, Pending, Avg Score, Top Class), filter bar (Class XI 1-12, Platform, Grade, Status, Search), dense high-utility journal table with batch actions, export CSV/Excel triggers, and quick toggle for public results page visibility.",
+      "grading_modal": "Side-by-side or stacked drawer featuring embedded oEmbed/video link preview, rubric slider/scores, Gemini 3.1 Pro generated commentary breakdown, manual override toggle, retry AI button, and publish switch."
+    }
+  },
+  "rubric_breakdown_design": {
+    "content_and_context": {
+      "weight": "50%",
+      "title_id": "Konten & Konteks Musik",
+      "title_en": "Content & Musical Context",
+      "color": "amber",
+      "description": "Pemahaman harmoni, ketepatan nada, kesesuaian dengan tema 'Musik di Sekitar Kita'"
+    },
+    "delivery_and_subtitles": {
+      "weight": "30%",
+      "title_id": "Penyampaian & Teks/Sutradara",
+      "title_en": "Delivery & Subtitles/Performance",
+      "color": "indigo",
+      "description": "Ekspresi vokal/instrumen, kejelasan artikulasi, sinkronisasi teks/penjelasan video"
+    },
+    "technical_and_tagging": {
+      "weight": "20%",
+      "title_id": "Kualitas Teknikal & Tagging",
+      "title_en": "Technical & Tagging Quality",
+      "color": "emerald",
+      "description": "Kualitas audio-visual, kelengkapan hashtag/metadata, pencahayaan dan framing"
+    }
+  },
+  "image_urls": {
+    "hero_music_studio": {
+      "url": "https://images.unsplash.com/photo-1511379938547-c1f69419868d?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Acoustic instruments and creative music studio setup",
+      "category": "public_submit_hero"
+    },
+    "student_performing": {
+      "url": "https://images.unsplash.com/photo-1786291937231-19ed93346573?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "High school student performing acoustic guitar music project",
+      "category": "public_results_header"
+    },
+    "video_filming_camera": {
+      "url": "https://images.unsplash.com/photo-1668620428264-6378ce10b69c?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Students filming music performance with video camera",
+      "category": "project_banner"
+    }
+  },
+  "data_testid_convention": {
+    "public_submit_form": {
+      "full_name_input": "input-full-name",
+      "class_select": "select-class-name",
+      "attendance_number_input": "input-attendance-number",
+      "video_url_input": "input-video-url",
+      "submit_button": "button-submit-assignment",
+      "language_toggle_id": "button-lang-id",
+      "language_toggle_en": "button-lang-en",
+      "success_message_banner": "banner-submit-success"
+    },
+    "public_results": {
+      "class_filter": "select-results-class",
+      "attendance_input": "input-results-attendance",
+      "search_button": "button-search-results",
+      "result_card": "card-student-result",
+      "disabled_notice": "banner-results-disabled"
+    },
+    "teacher_dashboard": {
+      "login_google_button": "button-google-login",
+      "journal_table": "table-teacher-journal",
+      "class_filter_dropdown": "filter-class-dropdown",
+      "platform_filter_dropdown": "filter-platform-dropdown",
+      "status_filter_dropdown": "filter-status-dropdown",
+      "search_input": "input-search-journal",
+      "export_csv_button": "button-export-csv",
+      "export_excel_button": "button-export-excel",
+      "toggle_results_page": "switch-toggle-results-public",
+      "review_ai_button": "button-review-ai-submission",
+      "publish_score_switch": "switch-publish-score",
+      "retry_ai_button": "button-retry-ai-grading",
+      "save_journal_button": "button-save-journal-edit"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Build a dual-theme modern, warm-toned full-stack React app with FastAPI backend support for 12 classes (Kelas XI 1 through XI 12).",
+    "Implement bilingual support (ID & EN) on /submit page with instant persistent state or context.",
+    "Ensure input validation for platforms (TikTok, Instagram, Facebook, YouTube) with regex checks and live visual platform icon badge.",
+    "On successful submission, show exact required success message: 'Your video assignment link has been successfully submitted / Tugas link video Anda berhasil dikirimkan.'",
+    "Ensure students NEVER see the raw AI grading in progress on the /submit page.",
+    "The Teacher Dashboard (/dashboard) must handle Google login (mocked or real), single-click admin authorization, filtering by class (XI 1 - XI 12), platform, grading status, and instant text search.",
+    "Integrate Gemini 3.1 Pro AI grading calculation (or resilient fallback evaluator) using metadata (oEmbed) based on the 3 rubrics: Content & Context 50%, Delivery & Subtitles 30%, Technical & Tagging 20%.",
+    "Provide CSV and Excel export functionality for teacher class records.",
+    "Implement public results page (/results) with class + attendance lookup and a global toggle switch in Teacher Dashboard settings to enable/disable public access.",
+    "Ensure all interactive buttons, inputs, tables, toggles, and notification toasts carry the exact data-testid attributes defined above."
+  ]
+}
