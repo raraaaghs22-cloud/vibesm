@@ -176,7 +176,7 @@ export const ReviewSheet = ({ id, onClose, onChanged }) => {
             {processing && <p className="flex items-center gap-2 rounded-xl bg-sky-400/10 p-3 text-xs text-sky-300 ring-1 ring-sky-400/20"><Loader2 className="h-4 w-4 animate-spin" /> AI sedang menilai kiriman ini…</p>}
             {s.extraction_ok === false && (
               <p className="flex items-start gap-2 rounded-xl bg-amber-400/10 p-3 text-xs text-amber-200 ring-1 ring-amber-400/20" data-testid="text-extraction-failed">
-                <AlertTriangle className="h-4 w-4 shrink-0" /> Data gagal diekstrak karena privasi link. Tonton video secara manual lalu isi nilai.
+                <AlertTriangle className="h-4 w-4 shrink-0" /> Sistem tidak dapat menonton video karena tautan diprivasi atau diblokir platform. Silakan klik tautan dan nilai secara manual.
               </p>
             )}
 

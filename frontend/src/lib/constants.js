@@ -29,6 +29,7 @@ export const GRADE_CLS = {
   B: "bg-sky-400/15 text-sky-300 ring-sky-400/40",
   C: "bg-amber-400/15 text-amber-300 ring-amber-400/40",
   D: "bg-rose-500/15 text-rose-300 ring-rose-500/40",
+  "N/A": "bg-zinc-500/15 text-zinc-300 ring-zinc-500/40",
 };
 
 export const STATUS = {

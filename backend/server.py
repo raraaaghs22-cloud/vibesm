@@ -22,7 +22,11 @@ from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+import tempfile
+import shutil
+import yt_dlp
+import imageio_ffmpeg
+from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -44,8 +48,9 @@ PLATFORM_PATTERNS = {
     "instagram": r"(^|\.)(instagram\.com|instagr\.am)$",
     "facebook": r"(^|\.)(facebook\.com|fb\.watch|fb\.com)$",
 }
-EXTRACTION_FAILED = "Data gagal diekstrak karena privasi link."
-PRIVACY_WEAKNESS = "Sistem tidak dapat membaca konten karena privasi. Silakan nilai secara manual"
+EXTRACTION_FAILED = "Video tidak dapat diekstrak karena tautan diprivasi atau diblokir platform."
+PRIVACY_WEAKNESS = "Sistem tidak dapat menonton video karena tautan diprivasi atau diblokir platform. Silakan klik tautan dan nilai secara manual."
+MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
 
 def now_iso():
@@ -322,15 +327,31 @@ LLM_LOCK = PriorityLock()
 PRIO_TEACHER, PRIO_BACKGROUND = 0, 1
 
 
-async def ask_llm(system_message: str, session_id: str, prompt: str, prio: int = PRIO_BACKGROUND, attempts: int = 5) -> str:
+class UrlVideoChat(LlmChat):
+    """Sends a public video URL (e.g. YouTube) for Gemini to watch directly."""
+    video_url: Optional[str] = None
+
+    async def _add_user_message(self, messages, message):
+        messages.append({"role": "user", "content": [
+            {"type": "file", "file": {"file_id": self.video_url, "format": "video/mp4"}},
+            {"type": "text", "text": message.text}]})
+        await self._save_messages(messages)
+
+
+async def ask_llm(system_message: str, session_id: str, prompt: str, prio: int = PRIO_BACKGROUND, attempts: int = 5,
+                  video_url: Optional[str] = None, video_path: Optional[str] = None) -> str:
     last = None
     for i in range(attempts):
         try:
             await LLM_LOCK.acquire(prio)
             try:
-                chat = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"{session_id}-{uuid.uuid4().hex[:6]}",
-                               system_message=system_message).with_model("gemini", "gemini-3.1-pro-preview")
-                return await chat.send_message(UserMessage(text=prompt))
+                cls = UrlVideoChat if video_url else LlmChat
+                chat = cls(api_key=EMERGENT_LLM_KEY, session_id=f"{session_id}-{uuid.uuid4().hex[:6]}",
+                           system_message=system_message).with_model("gemini", "gemini-3.1-pro-preview")
+                if video_url:
+                    chat.video_url = video_url
+                files = [FileContentWithMimeType(mime_type="video/mp4", file_path=video_path)] if video_path else None
+                return await chat.send_message(UserMessage(text=prompt, file_contents=files))
             finally:
                 LLM_LOCK.release()
         except Exception as e:  # noqa: BLE001
@@ -342,14 +363,17 @@ async def ask_llm(system_message: str, session_id: str, prompt: str, prio: int =
 
 
 # ---------- AI grading ----------
-SYSTEM_PROMPT = """Kamu adalah Asisten Guru Seni Musik SMA. Evaluasi metadata video ini untuk tugas 'Musik di Sekitar Kita'. JIKA data berisi pesan 'Data gagal diekstrak...', BERHENTI menilai, berikan skor 0, dan tulis di Weaknesses: 'Sistem tidak dapat membaca konten karena privasi. Silakan nilai secara manual'. JIKA data tersedia, nilai dengan rubrik berikut: Content & Context (50%): Penjelasan fungsi musik & contoh nyata. Delivery & Subtitles (30%): Gaya bahasa komunikatif & teks. Technical & Tagging (20%): Ada #FungsiMusik dan mention @Mr. Ocha.
-
-FORMAT OUTPUT WAJIB: SELALU kembalikan HANYA objek JSON murni (tanpa teks pengantar, tanpa markdown, tanpa ```), dengan kunci:
-"ai_score" (angka 0-100, = content_score*0.5 + delivery_score*0.3 + technical_score*0.2),
-"ai_letter_grade" (huruf "A" | "B" | "C" | "D"; A >= 90, B 80-89, C 70-79, D < 70),
-"ai_strengths" (string, kelebihan dalam Bahasa Indonesia),
-"ai_weaknesses" (string, kekurangan & saran dalam Bahasa Indonesia),
-"content_score" (0-100), "delivery_score" (0-100), "technical_score" (0-100)."""
+SYSTEM_PROMPT = """Kamu adalah Asisten Guru Seni Musik SMA yang ahli dalam menganalisis konten video (visual, audio, dan teks) serta objektif dalam memberikan nilai. Tugasmu adalah mengevaluasi video tugas siswa yang berjudul 'Creative Video Project: Musik di Sekitar Kita'.
+ATURAN UTAMA (ERROR HANDLING): Jika kamu menerima pesan bahwa video tidak dapat diekstrak, atau jika kamu tidak bisa mengakses/menonton isi video tersebut karena pembatasan privasi tautan (private link), JANGAN mengarang nilai. Langsung berikan format berikut:
+ai_score: 0
+ai_letter_grade: "N/A"
+ai_strengths: "-"
+ai_weaknesses: "Sistem tidak dapat menonton video karena tautan diprivasi atau diblokir platform. Silakan klik tautan dan nilai secara manual."
+RUBRIK PENILAIAN (Jika video berhasil diakses/ditonton): Nilai video secara keseluruhan dalam skala 0-100 berdasarkan 3 kriteria berikut:
+Content & Context (Bobot 50%): Analisis ISI VIDEO (visual dan audio) beserta caption-nya. Apakah video tersebut menjelaskan fungsi musik di dunia nyata secara akurat, kreatif, dan menarik? Apakah ada contoh nyata berupa audio atau visual yang mendukung penjelasan tersebut?
+Delivery & Subtitles (Bobot 30%): Bagaimana cara penyampaian siswa di dalam video? Apakah komunikatif, jelas, dan percaya diri? Periksa juga apakah terdapat subtitle atau teks di layar video untuk membantu penyampaian.
+Technical & Tagging (Bobot 20%): Apakah video berorientasi vertikal (9:16)? Apakah terdapat hashtag #FungsiMusik dan mention @Mr. Ocha di dalam caption atau teks video?
+FORMAT OUTPUT WAJIB (JSON MURNI): Kamu hanya boleh menjawab dengan format JSON yang terstruktur, menggunakan bahasa Indonesia yang baku dan membangun. Jangan tambahkan teks apa pun di luar JSON ini: { "ai_score": [Angka 0-100], "ai_letter_grade": "[A untuk >90, B untuk 80-89, C untuk 70-79, D untuk <70]", "ai_strengths": "[Tuliskan 1-2 kalimat spesifik mengenai kekuatan atau hal positif yang ditemukan dari isi video dan penyampaiannya]", "ai_weaknesses": "[Tuliskan 1-2 kalimat spesifik mengenai kekurangan video dan saran perbaikan untuk siswa]" }"""
 
 HASHTAG_RE = re.compile(r"#[\w\u00C0-\u024F]+", re.UNICODE)
 MENTION_RE = re.compile(r"@[\w.]+(?:\s(?:Ocha))?", re.UNICODE)
@@ -391,40 +415,68 @@ def clamp(v, default=0.0) -> float:
         return default
 
 
+def download_video(url: str, folder: str) -> Optional[str]:
+    opts = {"outtmpl": f"{folder}/video.%(ext)s", "format": "b[ext=mp4][height<=720]/b[height<=720]/b",
+            "max_filesize": MAX_VIDEO_BYTES, "quiet": True, "no_warnings": True, "noplaylist": True,
+            "socket_timeout": 20, "ffmpeg_location": imageio_ffmpeg.get_ffmpeg_exe(),
+            "merge_output_format": "mp4"}
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ydl.download([url])
+    except Exception as e:  # noqa: BLE001
+        logger.info(f"Video download failed: {str(e)[:200]}")
+        return None
+    files = [p for p in Path(folder).iterdir() if p.is_file() and p.stat().st_size > 0]
+    return str(files[0]) if files else None
+
+
+def caption_text(meta: dict) -> str:
+    return metadata_text(meta) if has_readable_text(meta) else "Caption/metadata tidak tersedia."
+
+
 async def grade_submission(sub_id: str):
     sub = await db.submissions.find_one({"id": sub_id}, {"_id": 0})
     if not sub:
         return
     await db.submissions.update_one({"id": sub_id}, {"$set": {"status": "processing", "error": None}})
+    folder = tempfile.mkdtemp(prefix="vibesmai-")
     try:
         meta = await fetch_metadata(sub["video_link"], sub["platform"])
-        payload = metadata_text(meta)
-        extraction_ok = payload != EXTRACTION_FAILED
-        prompt = (f"Siswa: {sub['full_name']} (Kelas {sub['class_name']}, Absen {sub['attendance_number']})\n"
-                  f"Link video: {sub['video_link']}\n\nMetadata video:\n{payload}")
-        reply = await ask_llm(SYSTEM_PROMPT, f"grade-{sub_id}", prompt, PRIO_BACKGROUND, attempts=5)
-        res = parse_json(reply)
-        if not extraction_ok:
-            c = d = t = score = 0.0
-            strengths = res.get("ai_strengths") or "-"
-            weaknesses = PRIVACY_WEAKNESS
+        video_url = video_path = None
+        if sub["platform"] == "youtube":
+            video_url = sub["video_link"] if meta.get("oembed") else None
         else:
-            c, d, t = (clamp(res.get(k)) for k in ("content_score", "delivery_score", "technical_score"))
-            score = clamp(res.get("ai_score"), weighted(c, d, t))
+            video_path = await asyncio.wait_for(asyncio.to_thread(download_video, sub["video_link"], folder), 180)
+        extraction_ok = bool(video_url or video_path)
+        payload = caption_text(meta) if extraction_ok else EXTRACTION_FAILED
+        res = {}
+        if extraction_ok:
+            prompt = (f"Siswa: {sub['full_name']} (Kelas {sub['class_name']}, Absen {sub['attendance_number']})\n"
+                      f"Link video: {sub['video_link']}\n\nVideo tugas terlampir. Caption/metadata video:\n{payload}")
+            reply = await ask_llm(SYSTEM_PROMPT, f"grade-{sub_id}", prompt, PRIO_BACKGROUND, attempts=5,
+                                  video_url=video_url, video_path=video_path)
+            res = parse_json(reply)
+        if not extraction_ok or str(res.get("ai_letter_grade", "")).upper() == "N/A":
+            extraction_ok = False
+            score, grade, strengths, weaknesses = 0.0, "N/A", "-", PRIVACY_WEAKNESS
+        else:
+            score = clamp(res.get("ai_score"))
+            grade = letter_grade(score)
             strengths = res.get("ai_strengths", "")
             weaknesses = res.get("ai_weaknesses", "")
-        grade = letter_grade(score)
         ai = {"ai_score": score, "ai_letter_grade": grade, "ai_strengths": strengths, "ai_weaknesses": weaknesses,
-              "content_score": c, "delivery_score": d, "technical_score": t,
-              "raw_letter_grade": res.get("ai_letter_grade"), "graded_at": now_iso()}
+              "raw_letter_grade": res.get("ai_letter_grade"), "video_mode": "url" if video_url else "file" if video_path else None,
+              "graded_at": now_iso()}
         await db.submissions.update_one({"id": sub_id}, {"$set": {
             "status": "draft", "metadata": meta, "ai_input": payload, "extraction_ok": extraction_ok, "ai": ai,
             "ai_score": score, "ai_letter_grade": grade, "ai_strengths": strengths, "ai_weaknesses": weaknesses,
-            "content_score": c, "delivery_score": d, "technical_score": t,
+            "content_score": None, "delivery_score": None, "technical_score": None,
             "final_score": score, "final_grade": grade, "manually_edited": False, "updated_at": now_iso()}})
     except Exception as e:
         logger.exception("AI grading failed")
         await db.submissions.update_one({"id": sub_id}, {"$set": {"status": "failed", "error": str(e)[:300]}})
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
 
 
 # ---------- Student feedback ----------
