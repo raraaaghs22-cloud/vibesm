@@ -49,3 +49,10 @@ User choices: guru bisa mengatur apakah halaman nilai siswa ditampilkan; AI otom
 - Tampil di /results bersama Nilai Final (hanya status final). Kolom ekspor "Komentar untuk Siswa".
 - Antrean AI global (PriorityLock, 1 permintaan serentak, retry/backoff); aksi guru diprioritaskan di atas penilaian latar belakang. Memperbaiki kegagalan penilaian saat banyak siswa mengirim bersamaan.
 - Tested iteration_4: 9/9 feedback + 34/34 regression, UI pass.
+
+## Update (Jun 2026) — AI Penilai v3 (Gemini Multimodal)
+- SYSTEM_PROMPT diganti persis sesuai teks guru (analisis visual+audio+teks, output JSON 4 kunci).
+- YouTube: URL dikirim langsung ke Gemini (file_id) agar video ditonton; TikTok/IG/FB: diunduh via yt-dlp (imageio-ffmpeg) lalu dilampirkan mp4.
+- Video tidak dapat diakses/diunduh atau AI menjawab N/A -> skor 0, grade "N/A", strengths "-", weaknesses pesan privasi baru. Badge N/A abu-abu.
+- Sub-skor rubrik tidak lagi diisi AI (null); guru tetap bisa isi manual. Tested iteration_6: 32/32 regresi + 3/3 live AI, UI pass.
+- Catatan: unduhan TikTok/IG/FB dari server sering diblokir platform -> hasil N/A (nilai manual).

@@ -1,0 +1,32 @@
+{
+  "summary": "Full back-end + front-end verification of the new SYSTEM_PROMPT (50/30/20 rubric + N/A privacy fallback). Backend regression 32/32 PASS (-n 0). Live AI tests (3/3 PASS, 142s): (a) Public YouTube https://www.youtube.com/watch?v=jNQXAC9IVRw -> status=draft, ai.video_mode='url', letter grade in {A,B,C,D} and consistent with ai_score, Indonesian strengths/weaknesses non-empty, content/delivery/technical_score all null, final_score=ai_score; (b) Nonexistent YouTube id (aaaaaaaaaaa) -> ai_score=0, ai_letter_grade='N/A', ai_strengths='-', ai_weaknesses EXACTLY the required Indonesian privacy sentence, extraction_ok=false, ai.video_mode=None, no AI call; (c) Instagram unreachable reel -> same N/A result. Frontend admin (/admin, Bearer test_admin_session_vibesmai): N/A badge renders gray (zinc classes from GRADE_CLS['N/A']) in table and review sheet; data-testid='text-extraction-failed' banner shows the exact mandated Indonesian sentence; Save Draft and Save Permanen (Final) both work on an N/A submission with a manually-entered final_score, toast 'Nilai Final disimpan · AI sedang membuat komentar…' confirms the feedback job was enqueued. No critical issues found; implementation matches the spec.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_backend_api.py",
+    "/app/backend/tests/test_live_ai_na.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py grade_submission correctly nulls content_score/delivery_score/technical_score after AI grading so the UI progress bars start at 0 — matches new rubric spec.",
+    "Letter grade boundary note (minor): spec says A for >90 (exclusive) and B for 80-89. server.letter_grade uses `>90` and `>=80` so score=90 is B (consistent with spec). score=89.5 would also be B. OK.",
+    "N/A short-circuit: when extraction_ok False OR when model echoes ai_letter_grade='N/A', server forces (0,'N/A','-',PRIVACY_WEAKNESS) and skips the ai_score from the model — robust against the LLM going off-script.",
+    "generate_feedback filters out PRIVACY_WEAKNESS before composing the student comment — correct, prevents leaking the system message to students.",
+    "UrlVideoChat overrides _add_user_message with a hard-coded 'video/mp4' format for the YouTube URL file_id. If Gemini ever rejects youtube.com URLs through the file-id path we have no fallback (yt-dlp is bot-blocked). Works today but is a single-point-of-failure worth tracking.",
+    "detect_platform catches ValueError from urlparse but not AttributeError on exotic inputs; low risk given Pydantic max_length=1000.",
+    "ReviewSheet.jsx hard-codes the privacy sentence rather than reading it from a shared constants file — if the Indonesian wording ever changes in server.py (PRIVACY_WEAKNESS), these two will drift. Consider exporting a shared i18n key.",
+    "@app.on_event is deprecated in FastAPI >=0.109; migrate to lifespan handlers (non-blocking)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend_api.py",
+    "/app/backend/tests/test_live_ai_na.py"
+  ],
+  "success_rate": {"backend": "32/32 regression + 3/3 live AI = 100%", "frontend": "100% (N/A badge · banner · final/draft save on N/A)"},
+  "test_credentials": "Admin session_token=test_admin_session_vibesmai (raraaaghs22@gmail.com). Non-admin session_token=test_nonadmin_session_vibesmai.",
+  "seed_data_creation": "TestSeededAISamples now self-seeds a TEST_IG_Privat record (deleted by autouse cleanup fixture) — no reliance on legacy 'Test IG Privat'/'Test YouTube' docs. All TEST_LIVE_* submissions were cleaned up automatically by the module fixture.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_live_ai_na.py is slow (~140s) and consumes real Gemini credits — only re-run if SYSTEM_PROMPT, grade_submission, UrlVideoChat, or N/A fallback logic changes. Keep live submissions <=3 per run (LLM_LOCK serializes). Pre-existing 'TEST Prompt V3' N/A records in XI 2 remain in the DB (useful for quick manual UI inspection); feel free to delete them if the dashboard needs to be clean. Use `pytest tests/test_backend_api.py -m 'not slow' -n 0` for the regression suite; both former flaky issues (TestPublicResults xdist race, TestSeededAISamples legacy dependency) are now resolved.",
+  "rca of the issue": "No bugs — the new SYSTEM_PROMPT + grade_submission behave exactly as specified: public YouTube is sent via url mode and produces a 50/30/20 Indonesian JSON rubric; any extraction failure (private/nonexistent YouTube, Instagram/TikTok/Facebook that yt-dlp cannot download) short-circuits to the mandated N/A tuple without an AI call; UI renders the gray N/A badge and privacy banner, and teachers can override with a manual final score + Save Draft/Final."
+}

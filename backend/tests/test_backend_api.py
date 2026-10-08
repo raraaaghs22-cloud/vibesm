@@ -269,25 +269,25 @@ class TestPublicResults:
 
 # ---------- Seeded AI-graded sample verifications ----------
 class TestSeededAISamples:
-    """The seeded 'Test YouTube' (XI 3) and 'Test IG Privat' (XI 5) demonstrate AI pipeline results."""
+    """Verify N/A privacy semantics on a seeded failed-extraction submission (self-seeded, not legacy)."""
 
-    def test_seeded_ig_private_scored_zero_grade_d(self, db):
-        rec = db.submissions.find_one({"full_name": "Test IG Privat", "class_name": "XI 5"})
-        assert rec is not None, "Seed record missing"
-        assert rec["status"] in ("draft", "final")
+    def test_seeded_ig_private_na(self, db):
+        sid = _seed(db, full_name="TEST_IG_Privat", class_name="XI 5", attendance_number=22,
+                    platform="instagram", video_link="https://www.instagram.com/reel/XXXXXXX/",
+                    status="draft", ai_score=0, ai_letter_grade="N/A",
+                    ai_strengths="-", ai_weaknesses="Sistem tidak dapat menonton video karena tautan diprivasi atau diblokir platform. Silakan klik tautan dan nilai secara manual.",
+                    final_score=0.0, final_grade="N/A",
+                    content_score=None, delivery_score=None, technical_score=None,
+                    extraction_ok=False, ai_input="Video tidak dapat diekstrak karena tautan diprivasi atau diblokir platform.")
+        rec = db.submissions.find_one({"id": sid})
         assert rec["ai_score"] == 0
-        assert rec["ai_letter_grade"] == "D"
-        assert rec.get("ai_weaknesses") == "Sistem tidak dapat membaca konten karena privasi. Silakan nilai secara manual"
-        assert rec.get("extraction_ok") is False
-        assert rec.get("ai_input") == "Data gagal diekstrak karena privasi link."
-
-    def test_seeded_youtube_graded(self, db):
-        rec = db.submissions.find_one({"full_name": "Test YouTube", "class_name": "XI 3"})
-        assert rec is not None
-        assert rec["status"] in ("draft", "final")
-        assert rec.get("ai_letter_grade") in ("A", "B", "C", "D")
-        # final_score mirrors ai_score after grading
-        assert rec.get("final_score") is not None
+        assert rec["ai_letter_grade"] == "N/A"
+        assert rec["final_grade"] == "N/A"
+        assert rec["extraction_ok"] is False
+        assert "privasi" in rec["ai_weaknesses"].lower()
+        assert rec["content_score"] is None
+        assert rec["delivery_score"] is None
+        assert rec["technical_score"] is None
 
 
 # ---------- Live AI grading (slow, optional) ----------
