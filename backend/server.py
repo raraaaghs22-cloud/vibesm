@@ -24,12 +24,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 import tempfile
 import shutil
-import yt_dlp
-import imageio_ffmpeg
 from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+from media_pipeline import extract_media  # noqa: E402  (reads RAPIDAPI_KEY from env)
 
 client = AsyncIOMotorClient(os.environ['MONGO_URL'])
 db = client[os.environ['DB_NAME']]
@@ -48,9 +47,8 @@ PLATFORM_PATTERNS = {
     "instagram": r"(^|\.)(instagram\.com|instagr\.am)$",
     "facebook": r"(^|\.)(facebook\.com|fb\.watch|fb\.com)$",
 }
-EXTRACTION_FAILED = "Video tidak dapat diekstrak karena tautan diprivasi atau diblokir platform."
-PRIVACY_WEAKNESS = "Sistem tidak dapat menonton video karena tautan diprivasi atau diblokir platform. Silakan klik tautan dan nilai secara manual."
-MAX_VIDEO_BYTES = 50 * 1024 * 1024
+EXTRACTION_FAILED = "Video tidak dapat diekstrak."
+PRIVACY_WEAKNESS = "Sistem gagal mengekstrak video (akun diprivasi/diblokir). Mohon tonton link secara manual."
 
 
 def now_iso():
@@ -363,17 +361,8 @@ async def ask_llm(system_message: str, session_id: str, prompt: str, prio: int =
 
 
 # ---------- AI grading ----------
-SYSTEM_PROMPT = """Kamu adalah Asisten Guru Seni Musik SMA yang ahli dalam menganalisis konten video (visual, audio, dan teks) serta objektif dalam memberikan nilai. Tugasmu adalah mengevaluasi video tugas siswa yang berjudul 'Creative Video Project: Musik di Sekitar Kita'.
-ATURAN UTAMA (ERROR HANDLING): Jika kamu menerima pesan bahwa video tidak dapat diekstrak, atau jika kamu tidak bisa mengakses/menonton isi video tersebut karena pembatasan privasi tautan (private link), JANGAN mengarang nilai. Langsung berikan format berikut:
-ai_score: 0
-ai_letter_grade: "N/A"
-ai_strengths: "-"
-ai_weaknesses: "Sistem tidak dapat menonton video karena tautan diprivasi atau diblokir platform. Silakan klik tautan dan nilai secara manual."
-RUBRIK PENILAIAN (Jika video berhasil diakses/ditonton): Nilai video secara keseluruhan dalam skala 0-100 berdasarkan 3 kriteria berikut:
-Content & Context (Bobot 50%): Analisis ISI VIDEO (visual dan audio) beserta caption-nya. Apakah video tersebut menjelaskan fungsi musik di dunia nyata secara akurat, kreatif, dan menarik? Apakah ada contoh nyata berupa audio atau visual yang mendukung penjelasan tersebut?
-Delivery & Subtitles (Bobot 30%): Bagaimana cara penyampaian siswa di dalam video? Apakah komunikatif, jelas, dan percaya diri? Periksa juga apakah terdapat subtitle atau teks di layar video untuk membantu penyampaian.
-Technical & Tagging (Bobot 20%): Apakah video berorientasi vertikal (9:16)? Apakah terdapat hashtag #FungsiMusik dan mention @Mr. Ocha di dalam caption atau teks video?
-FORMAT OUTPUT WAJIB (JSON MURNI): Kamu hanya boleh menjawab dengan format JSON yang terstruktur, menggunakan bahasa Indonesia yang baku dan membangun. Jangan tambahkan teks apa pun di luar JSON ini: { "ai_score": [Angka 0-100], "ai_letter_grade": "[A untuk >90, B untuk 80-89, C untuk 70-79, D untuk <70]", "ai_strengths": "[Tuliskan 1-2 kalimat spesifik mengenai kekuatan atau hal positif yang ditemukan dari isi video dan penyampaiannya]", "ai_weaknesses": "[Tuliskan 1-2 kalimat spesifik mengenai kekurangan video dan saran perbaikan untuk siswa]" }"""
+SYSTEM_PROMPT = """Tonton video ini dan baca teks caption-nya. Nilai dari skala 70-100 berdasarkan: 1. Content & Context (50%): Apakah isi video dan suaranya menjelaskan fungsi musik dengan contoh nyata yang menarik? 2. Delivery & Subtitles (30%): Apakah penyampaian di dalam video komunikatif dan ada subtitle? 3. Technical (20%): Orientasi vertikal 9:16, ada hashtag #FungsiMusik & @Mr. Ocha. Balas HANYA dengan format JSON murni yang berisi ai_score, ai_letter_grade, ai_strengths (maks 15 kata), dan ai_weaknesses (maks 15 kata)."""
+
 
 HASHTAG_RE = re.compile(r"#[\w\u00C0-\u024F]+", re.UNICODE)
 MENTION_RE = re.compile(r"@[\w.]+(?:\s(?:Ocha))?", re.UNICODE)
@@ -415,23 +404,14 @@ def clamp(v, default=0.0) -> float:
         return default
 
 
-def download_video(url: str, folder: str) -> Optional[str]:
-    opts = {"outtmpl": f"{folder}/video.%(ext)s", "format": "b[ext=mp4][height<=720]/b[height<=720]/b",
-            "max_filesize": MAX_VIDEO_BYTES, "quiet": True, "no_warnings": True, "noplaylist": True,
-            "socket_timeout": 20, "ffmpeg_location": imageio_ffmpeg.get_ffmpeg_exe(),
-            "merge_output_format": "mp4"}
-    try:
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            ydl.download([url])
-    except Exception as e:  # noqa: BLE001
-        logger.info(f"Video download failed: {str(e)[:200]}")
-        return None
-    files = [p for p in Path(folder).iterdir() if p.is_file() and p.stat().st_size > 0]
-    return str(files[0]) if files else None
-
-
-def caption_text(meta: dict) -> str:
-    return metadata_text(meta) if has_readable_text(meta) else "Caption/metadata tidak tersedia."
+def build_caption(meta: dict, media: dict) -> str:
+    base = metadata_text(meta) if has_readable_text(meta) else ""
+    extra = [f"Judul (scraper): {media['title']}" if media.get("title") else "",
+             f"Caption (scraper): {media['caption'][:3000]}" if media.get("caption") and media.get("caption") != media.get("title") else ""]
+    blob = "\n".join(x for x in [base, *extra] if x)
+    if media.get("transcript"):
+        blob += f"\nTranskrip/subtitle otomatis: {media['transcript']}"
+    return blob or "Caption/metadata tidak tersedia."
 
 
 async def grade_submission(sub_id: str):
@@ -442,33 +422,29 @@ async def grade_submission(sub_id: str):
     folder = tempfile.mkdtemp(prefix="vibesmai-")
     try:
         meta = await fetch_metadata(sub["video_link"], sub["platform"])
-        video_url = video_path = None
-        if sub["platform"] == "youtube":
-            video_url = sub["video_link"] if meta.get("oembed") else None
-        else:
-            video_path = await asyncio.wait_for(asyncio.to_thread(download_video, sub["video_link"], folder), 180)
-        extraction_ok = bool(video_url or video_path)
-        payload = caption_text(meta) if extraction_ok else EXTRACTION_FAILED
-        res = {}
-        if extraction_ok:
+        media = await extract_media(sub["video_link"], sub["platform"], folder, youtube_public=bool(meta.get("oembed")))
+        extraction = {k: media[k] for k in ("ok", "mode", "source", "error")} | {"has_transcript": bool(media["transcript"])}
+        res, payload = {}, EXTRACTION_FAILED
+        if media["ok"]:
+            payload = build_caption(meta, media)
             prompt = (f"Siswa: {sub['full_name']} (Kelas {sub['class_name']}, Absen {sub['attendance_number']})\n"
-                      f"Link video: {sub['video_link']}\n\nVideo tugas terlampir. Caption/metadata video:\n{payload}")
+                      f"Link video: {sub['video_link']}\n\nVideo tugas terlampir. Judul, caption & metadata:\n{payload}")
             reply = await ask_llm(SYSTEM_PROMPT, f"grade-{sub_id}", prompt, PRIO_BACKGROUND, attempts=5,
-                                  video_url=video_url, video_path=video_path)
+                                  video_url=media["video_url"], video_path=media["video_path"])
             res = parse_json(reply)
-        if not extraction_ok or str(res.get("ai_letter_grade", "")).upper() == "N/A":
-            extraction_ok = False
+        if not media["ok"] or str(res.get("ai_letter_grade", "")).upper() == "N/A":
             score, grade, strengths, weaknesses = 0.0, "N/A", "-", PRIVACY_WEAKNESS
         else:
-            score = clamp(res.get("ai_score"))
+            score = max(70.0, clamp(res.get("ai_score"), 70.0))
             grade = letter_grade(score)
             strengths = res.get("ai_strengths", "")
             weaknesses = res.get("ai_weaknesses", "")
+        extraction_ok = grade != "N/A"
         ai = {"ai_score": score, "ai_letter_grade": grade, "ai_strengths": strengths, "ai_weaknesses": weaknesses,
-              "raw_letter_grade": res.get("ai_letter_grade"), "video_mode": "url" if video_url else "file" if video_path else None,
-              "graded_at": now_iso()}
+              "raw_letter_grade": res.get("ai_letter_grade"), "video_mode": media["mode"], "graded_at": now_iso()}
         await db.submissions.update_one({"id": sub_id}, {"$set": {
-            "status": "draft", "metadata": meta, "ai_input": payload, "extraction_ok": extraction_ok, "ai": ai,
+            "status": "draft", "metadata": meta, "ai_input": payload, "extraction_ok": extraction_ok,
+            "extraction": extraction, "ai": ai,
             "ai_score": score, "ai_letter_grade": grade, "ai_strengths": strengths, "ai_weaknesses": weaknesses,
             "content_score": None, "delivery_score": None, "technical_score": None,
             "final_score": score, "final_grade": grade, "manually_edited": False, "updated_at": now_iso()}})
