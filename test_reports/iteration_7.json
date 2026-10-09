@@ -1,0 +1,34 @@
+{
+  "summary": "Re-verified the N/A pipeline + instant POST /api/submissions guarantee after prompt updates. Backend regression 36/36 PASS (-n 0, 6.4s) including a NEW parametrized test test_submit_returns_quickly covering YouTube/TikTok/IG/FB that asserts POST /api/submissions returns <2s with ok=true (BackgroundTasks correctly offload AI grading). Live AI 3/3 PASS (160s): (a) Public YouTube https://www.youtube.com/watch?v=jNQXAC9IVRw -> status=draft, ai.video_mode='url', ai_letter_grade in {A,B,C,D} and consistent with ai_score, Indonesian strengths/weaknesses non-empty, content/delivery/technical_score null, final_score mirrors ai_score; (b) Nonexistent YouTube id -> ai_score=0, ai_letter_grade='N/A', ai_strengths='-', ai_weaknesses EXACTLY the new PRIVACY_WEAKNESS Indonesian sentence, extraction_ok=false, ai.video_mode=None; (c) Instagram unreachable reel -> same N/A tuple. Frontend admin /admin with Bearer test_admin_session_vibesmai: opened the review sheet for an N/A submission; data-testid='text-extraction-failed' shows the exact mandated sentence 'Sistem gagal mengekstrak video (akun diprivasi/diblokir). Mohon tonton link secara manual.'. Updated test_live_ai_na.py PRIVACY_MSG constant to match the current server.py PRIVACY_WEAKNESS wording (previous iteration had an older sentence).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_backend_api.py",
+    "/app/backend/tests/test_live_ai_na.py",
+    "/app/test_reports/pytest/pytest_results.xml",
+    "/app/test_reports/pytest/live_ai.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "ReviewSheet.jsx hard-codes the Indonesian privacy sentence in the data-testid='text-extraction-failed' banner. server.py PRIVACY_WEAKNESS is the source of truth; the two already drifted once (test_live_ai_na.py PRIVACY_MSG). Export a single shared constant (e.g. /lib/constants.js) to avoid future drift.",
+    "data-testid='text-extraction-error' is only rendered when s.extraction?.error is truthy. Legacy records graded before the extraction field was added will not surface the technical error. New records produced by current media_pipeline.extract_media always set extraction.error on failure, so this only affects historical data — low priority.",
+    "Legacy N/A records in production still carry the OLD weakness sentence ('Sistem tidak dapat menonton video karena tautan diprivasi...'). The textarea displays whatever is stored, so until those records are regraded (POST /admin/submissions/{id}/regrade) teachers will see the old text in the textarea while the banner shows the new one. Consider a one-off migration or document the regrade workflow.",
+    "letter_grade boundary: score=90.0 -> B (>=80), score>90 -> A. Spec says A for >90 exclusive, so 90 being B is intentional and consistent.",
+    "server.py uses deprecated @app.on_event('startup'/'shutdown'). Migrate to FastAPI lifespan handlers (non-blocking)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_backend_api.py",
+    "/app/backend/tests/test_live_ai_na.py"
+  ],
+  "success_rate": {"backend": "36/36 regression + 3/3 live AI = 100%", "frontend": "100% (N/A banner shows new text with exact wording)"},
+  "test_credentials": "Admin session_token=test_admin_session_vibesmai (raraaaghs22@gmail.com). Non-admin session_token=test_nonadmin_session_vibesmai.",
+  "seed_data_creation": "TEST_FAST_* submissions created by test_submit_returns_quickly are cleaned by autouse conftest cleanup. TEST_LIVE_* cleaned by module fixture in test_live_ai_na.py.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run regression with `pytest backend/tests/test_backend_api.py -m 'not slow' -n 0` (xdist loadscope causes a known race in TestPublicResults.test_public_results_enabled_only_final_exposed because another test toggles results_public=False). Live AI tests consume real Gemini credits (~160s, 3 submissions) — only run if SYSTEM_PROMPT, grade_submission, UrlVideoChat, extract_media, or PRIVACY_WEAKNESS logic changes. A couple of pre-existing 'wahyu' TikTok N/A records still live in XI 9/XI 10 with the OLD weakness text in their textarea; this is stale data, not a bug.",
+  "rca of the issue": "No bugs found. POST /api/submissions returns in <2s for all four platforms because grading is enqueued via FastAPI BackgroundTasks. extract_media wraps resolve_media in asyncio.wait_for(RESOLVE_TIMEOUT=15s); on timeout or any failure it returns ok=false with an error string, and grade_submission short-circuits to (ai_score=0, ai_letter_grade='N/A', ai_strengths='-', ai_weaknesses=PRIVACY_WEAKNESS) without calling the LLM. UrlVideoChat sends public YouTube URLs to Gemini as a file_id in video/mp4 format; the model returns the 70-100 JSON rubric which parse_json extracts. The banner (data-testid='text-extraction-failed') renders the exact Indonesian sentence from the spec and the technical error (data-testid='text-extraction-error') is rendered when extraction.error is present."
+}

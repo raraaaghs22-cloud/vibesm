@@ -79,6 +79,23 @@ class TestSubmissions:
             "attendance_number": 1, "video_link": "https://youtube.com/watch?v=a"})
         assert r.status_code == 422
 
+    @pytest.mark.parametrize("link", [
+        "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+        "https://www.tiktok.com/@u/video/7123456789012345678",
+        "https://www.instagram.com/reel/DOESNOTEXISTzzz/",
+        "https://www.facebook.com/watch/?v=1234567890",
+    ])
+    def test_submit_returns_quickly(self, anon_client, base_url, link, db):
+        name = f"TEST_FAST_{uuid.uuid4().hex[:6]}"
+        t0 = time.time()
+        r = anon_client.post(f"{base_url}/api/submissions", json={
+            "full_name": name, "class_name": "XI 4", "attendance_number": 11,
+            "video_link": link})
+        elapsed = time.time() - t0
+        assert r.status_code == 200
+        assert r.json()["ok"] is True
+        assert elapsed < 2.0, f"Submission took {elapsed:.2f}s (>2s) for {link}"
+
     def test_submit_short_name(self, anon_client, base_url):
         r = anon_client.post(f"{base_url}/api/submissions", json={
             "full_name": "A", "class_name": "XI 1",

@@ -24,8 +24,7 @@ load_dotenv(Path(__file__).parent.parent.parent / 'frontend' / '.env')
 BASE_URL = os.environ['REACT_APP_BACKEND_URL'].rstrip('/')
 MONGO_URL = os.environ['MONGO_URL']
 DB_NAME = os.environ['DB_NAME']
-PRIVACY_MSG = ("Sistem tidak dapat menonton video karena tautan diprivasi atau diblokir platform. "
-               "Silakan klik tautan dan nilai secara manual.")
+PRIVACY_MSG = "Sistem gagal mengekstrak video (akun diprivasi/diblokir). Mohon tonton link secara manual."
 
 db = MongoClient(MONGO_URL)[DB_NAME]
 
